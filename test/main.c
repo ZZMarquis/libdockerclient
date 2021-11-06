@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "docker_client.h"
+#include "http_utils.h"
 
 int main() {
     CURLcode res;
@@ -9,9 +10,11 @@ int main() {
     unsigned int resp_body_len;
     unsigned char *resp_headers;
     unsigned int resp_headers_len;
-    char *resp_headers_str;
+    dc_http_headers *headers = NULL;
+    dc_ping_result *ping_result = NULL;
 
-    res = get("http://127.0.0.1:2375/_ping",NULL, 30, 30, NULL, 0, &resp_body, &resp_body_len, &resp_headers, &resp_headers_len);
+    res = get("http://127.0.0.1:2375/_ping", NULL, 30, 30, NULL, 0, &resp_body, &resp_body_len, &resp_headers,
+              &resp_headers_len);
 //    res = get("http://localhost/_ping", "/var/run/docker.sock", 30, 30, NULL, 0, &resp_body, &resp_body_len, &resp_headers, &resp_headers_len);
     if (CURLE_OK != res) {
         printf("curl error:%d", res);
@@ -25,12 +28,17 @@ int main() {
         if (NULL == resp_headers) {
             printf("resp_headers is null\n");
         } else {
-            resp_headers_str = (char *)calloc(resp_headers_len + 1, sizeof(char ));
-            memcpy(resp_headers_str, resp_headers, resp_headers_len);
-            printf("%s\n", resp_headers_str);
+            printf("%s\n", resp_headers);
+            printf("---------------\n");
+            headers = dc_parse_http_headers(resp_headers);
+            dc_print_http_headers(headers);
+            dc_free_http_headers(headers);
             free(resp_headers);
         }
     }
+
+    ping_result  = dc_ping("http://127.0.0.1:2375/_ping");
+    free_ping_result(ping_result);
 
     return 0;
 }
