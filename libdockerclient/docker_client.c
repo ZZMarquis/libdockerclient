@@ -230,3 +230,37 @@ void free_ping_result(dc_ping_result *result) {
         free(result);
     }
 }
+
+void dc_free_key_values(dc_key_values *obj) {
+    int i = 0;
+    if (NULL == obj) {
+        return;
+    }
+    if (NULL != obj->key) {
+        free(obj->key);
+        obj->key = NULL;
+    }
+    if (NULL != obj->values && obj->values_count > 0) {
+        for (i = 0; i < obj->values_count; ++i) {
+            if (NULL == obj->values[i]) {
+                continue;
+            }
+            free(obj->values[i]);
+            obj->values[i] = NULL;
+        }
+        obj->values = NULL;
+    }
+    free(obj);
+}
+
+void dc_free_index_config(dc_index_config *obj) {
+    int i = 0;
+    if (NULL == obj) {
+        return;
+    }
+    if (NULL != obj->mirrors && obj->mirrors_count > 0) {
+        for (i = 0; i < obj->mirrors_count; ++i) {
+            if (NULL)
+        }
+    }
+}
