@@ -6,6 +6,7 @@
 
 #include "curl/curl.h"
 
+#include "cJSON.h"
 #include "http_utils.h"
 
 typedef struct _data_buff {
@@ -231,6 +232,25 @@ void free_ping_result(dc_ping_result *result) {
     }
 }
 
+void dc_free_str_array(dc_str_array *obj) {
+    int i = 0;
+    if (NULL == obj) {
+        return;
+    }
+    if (NULL != obj->str_array && obj->array_size > 0) {
+        for (i = 0; i < obj->array_size; ++i) {
+            if (NULL == obj->str_array[i]) {
+                continue;
+            }
+            free(obj->str_array[i]);
+            obj->str_array[i] = NULL;
+        }
+        free(obj->str_array);
+        obj->str_array = NULL;
+    }
+    free(obj);
+}
+
 void dc_free_key_values(dc_key_values *obj) {
     int i = 0;
     if (NULL == obj) {
@@ -248,6 +268,7 @@ void dc_free_key_values(dc_key_values *obj) {
             free(obj->values[i]);
             obj->values[i] = NULL;
         }
+        free(obj->values);
         obj->values = NULL;
     }
     free(obj);
@@ -260,7 +281,214 @@ void dc_free_index_config(dc_index_config *obj) {
     }
     if (NULL != obj->mirrors && obj->mirrors_count > 0) {
         for (i = 0; i < obj->mirrors_count; ++i) {
-            if (NULL)
+            if (NULL == obj->mirrors[i]) {
+                continue;
+            }
+            free(obj->mirrors[i]);
+            obj->mirrors[i] = NULL;
+        }
+        free(obj->mirrors);
+        obj->mirrors = NULL;
+    }
+    if (NULL != obj->name) {
+        free(obj->name);
+        obj->name = NULL;
+    }
+    free(obj);
+}
+
+void dc_free_key_index_config(dc_key_index_config *obj) {
+    int i = 0;
+    if (NULL == obj) {
+        return;
+    }
+    if (NULL != obj->key) {
+        free(obj->key);
+        obj->key = NULL;
+    }
+    if (NULL != obj->index_configs && obj->index_configs_count > 0) {
+        for (i = 0; i < obj->index_configs_count; ++i) {
+            if (NULL == obj->index_configs[i]) {
+                continue;
+            }
+            dc_free_index_config(obj->index_configs[i]);
+            obj->index_configs[i] = NULL;
+        }
+        free(obj->index_configs);
+        obj->index_configs = NULL;
+    }
+    free(obj);
+}
+
+void dc_free_registry_config(dc_registry_config *obj) {
+    int i = 0;
+    if (NULL == obj) {
+        return;
+    }
+    if (NULL != obj->index_configs && obj->index_configs_count > 0) {
+        for (i = 0; i < obj->index_configs_count; ++i) {
+            if (NULL == obj->index_configs[i]) {
+                continue;
+            }
+            free(obj->index_configs[i]);
+            obj->index_configs[i] = NULL;
+        }
+        free(obj->index_configs);
+        obj->index_configs = NULL;
+    }
+    if (NULL != obj->insecure_registry_cidrs && obj->insecure_registry_cidrs_count > 0) {
+        for (i = 0; i < obj->insecure_registry_cidrs_count; ++i) {
+            if (NULL == obj->insecure_registry_cidrs[i]) {
+                continue;
+            }
+            free(obj->insecure_registry_cidrs[i]);
+            obj->insecure_registry_cidrs[i] = NULL;
+        }
+        free(obj->insecure_registry_cidrs);
+        obj->insecure_registry_cidrs = NULL;
+    }
+    free(obj);
+}
+
+static void _calloc_and_cpy_str_from_json(char **dst, cJSON *item, const char *key) {
+    cJSON *sub = NULL;
+    sub = cJSON_GetObjectItem(item, key);
+    if (NULL == sub) {
+        return;
+    }
+    if (!cJSON_IsString(sub)) {
+        return;
+    }
+    _calloc_and_cpy_str(dst, cJSON_GetStringValue(sub));
+}
+
+static int _get_int_from_json(cJSON *item, const char *key) {
+    cJSON *sub = NULL;
+    sub = cJSON_GetObjectItem(item, key);
+    if (NULL == sub) {
+        return 0;
+    }
+    if (!cJSON_IsNumber(sub)) {
+        return 0;
+    }
+    return sub->valueint;
+}
+
+static int _get_json_array_size(cJSON *item, const char *key) {
+    cJSON *sub = NULL;
+    sub = cJSON_GetObjectItem(item, key);
+    if (NULL == sub) {
+        return 0;
+    }
+    if (!cJSON_IsArray(sub)) {
+        return 0;
+    }
+    return cJSON_GetArraySize(sub);
+}
+
+static void _parse_json_str_array(cJSON *array, dc_str_array **obj) {
+    int ret = 0;
+    int i = 0;
+    size_t str_len = 0;
+    cJSON *str_item = NULL;
+    if (NULL == array || !cJSON_IsArray(array)) {
+        *obj = NULL;
+        return;
+    }
+    *obj = (dc_str_array *)calloc(1, sizeof(dc_str_array));
+    if (NULL == *obj) {
+        return;
+    }
+    (*obj)->array_size = cJSON_GetArraySize(array);
+    (*obj)->str_array = (char **)calloc((*obj)->array_size, sizeof(char *));
+    if (NULL == (*obj)->str_array) {
+        goto end;
+    }
+    for (i = 0; i < (*obj)->array_size; ++i) {
+        str_item = cJSON_GetArrayItem(array, i);
+        if (NULL == str_item || !cJSON_IsString(str_item)) {
+            continue;
+        }
+        str_len = strlen(str_item->valuestring);
+        (*obj)->str_array[i] = (char *) calloc(str_len + 1, sizeof(char));
+        if (NULL == (*obj)->str_array[i]) {
+            continue;
+        }
+        memcpy((*obj)->str_array[i], str_item->valuestring, str_len);
+        (*obj)->str_array[i][str_len] = '\0';
+    }
+
+    ret = 1;
+
+    end:
+    if (!ret) {
+        dc_free_str_array(*obj);
+        *obj = NULL;
+    }
+}
+
+dc_info *dc_get_info(char *url) {
+    int ret = 0;
+    int i = 0;
+    CURLcode res;
+    unsigned char *resp_body;
+    unsigned int resp_body_len;
+    dc_info *info = NULL;
+    cJSON *root = NULL;
+    cJSON *tmp = NULL;
+    cJSON *array = NULL;
+
+    res = get(url, NULL, 30, 30, NULL, 0, &resp_body, &resp_body_len, NULL, NULL);
+    if (CURLE_OK != res) {
+        return NULL;
+    }
+    if (NULL == resp_body || 0 >= resp_body_len) {
+        return NULL;
+    }
+
+    root = cJSON_Parse((char *) resp_body);
+    if (NULL == root) {
+        goto end;
+    }
+
+    info = (dc_info *) calloc(1, sizeof(dc_info));
+    if (NULL == info) {
+        goto end;
+    }
+
+    _calloc_and_cpy_str_from_json(&info->id, root, "ID");
+    info->containers = _get_int_from_json(root, "Containers");
+    info->containers_running = _get_int_from_json(root, "ContainersRunning");
+    info->containers_paused = _get_int_from_json(root, "ContainersPaused");
+    info->containers_stopped = _get_int_from_json(root, "ContainersStopped");
+    info->images = _get_int_from_json(root, "Images");
+    _calloc_and_cpy_str_from_json(&info->driver, root, "Driver");
+    info->driver_statuses_count = _get_json_array_size(root, "DriverStatus");
+    if (info->driver_statuses_count > 0) {
+        array = cJSON_GetObjectItem(root, "DriverStatus");
+        info->driver_statuses = (dc_str_array **) calloc(info->driver_statuses_count, sizeof(dc_str_array *));
+        for (i = 0;  i< info->driver_statuses_count; ++i) {
+            tmp = cJSON_GetArrayItem(array, i);
+            if (NULL == tmp || !cJSON_IsArray(tmp)) {
+                continue;
+            }
+            _parse_json_str_array(tmp, &(info->driver_statuses[i]));
         }
     }
+
+
+    ret = 1;
+
+    end:
+    if (!ret) {
+        // TODO free dc_info
+        info = NULL;
+    }
+    if (NULL != resp_body) {
+        free(resp_body);
+    }
+    if (NULL != root) {
+        cJSON_free(root);
+    }
+    return info;
 }

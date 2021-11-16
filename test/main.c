@@ -12,6 +12,7 @@ int main() {
     unsigned int resp_headers_len;
     dc_http_headers *headers = NULL;
     dc_ping_result *ping_result = NULL;
+    dc_info *info = NULL;
 
     res = get("http://127.0.0.1:2375/_ping", NULL, 30, 30, NULL, 0, &resp_body, &resp_body_len, &resp_headers,
               &resp_headers_len);
@@ -39,6 +40,8 @@ int main() {
 
     ping_result  = dc_ping("http://127.0.0.1:2375/_ping");
     free_ping_result(ping_result);
+
+    info = dc_get_info("http://127.0.0.1:2375/v1.41/info");
 
     return 0;
 }
