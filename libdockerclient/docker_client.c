@@ -374,6 +374,22 @@ static int _get_int_from_json(cJSON *item, const char *key) {
     return sub->valueint;
 }
 
+static DC_BOOL _get_bool_from_json(cJSON *item, const char *key) {
+    cJSON *sub = NULL;
+    sub = cJSON_GetObjectItem(item, key);
+    if (NULL == sub) {
+        return DC_FALSE;
+    }
+    if (!cJSON_IsBool(sub)) {
+        return DC_FALSE;
+    }
+    if (sub->valueint) {
+        return DC_TRUE;
+    } else {
+        return DC_FALSE;
+    }
+}
+
 static int _get_json_array_size(cJSON *item, const char *key) {
     cJSON *sub = NULL;
     sub = cJSON_GetObjectItem(item, key);
@@ -395,12 +411,12 @@ static void _parse_json_str_array(cJSON *array, dc_str_array **obj) {
         *obj = NULL;
         return;
     }
-    *obj = (dc_str_array *)calloc(1, sizeof(dc_str_array));
+    *obj = (dc_str_array *) calloc(1, sizeof(dc_str_array));
     if (NULL == *obj) {
         return;
     }
     (*obj)->array_size = cJSON_GetArraySize(array);
-    (*obj)->str_array = (char **)calloc((*obj)->array_size, sizeof(char *));
+    (*obj)->str_array = (char **) calloc((*obj)->array_size, sizeof(char *));
     if (NULL == (*obj)->str_array) {
         goto end;
     }
@@ -424,6 +440,97 @@ static void _parse_json_str_array(cJSON *array, dc_str_array **obj) {
     if (!ret) {
         dc_free_str_array(*obj);
         *obj = NULL;
+    }
+}
+
+static int _get_json_sub_object_count(cJSON *item, const char *key) {
+    int count = 0;
+    cJSON *child = NULL;
+    if (NULL == item || !cJSON_IsObject(item)) {
+        return 0;
+    }
+    item = cJSON_GetObjectItem(item, key);
+    if (NULL == item) {
+        return 0;
+    }
+    child = item->child;
+    if (NULL == child) {
+        return 0;
+    }
+    do {
+        ++count;
+        child = child->next;
+    } while (NULL != child);
+    return count;
+}
+
+static void _parse_json_str_array_for_key_values(cJSON *array, dc_key_values *obj) {
+    int i = 0;
+    size_t str_len = 0;
+    cJSON *str_item = NULL;
+    if (NULL == array || !cJSON_IsArray(array)) {
+        obj->values = NULL;
+        return;
+    }
+    obj->values_count = cJSON_GetArraySize(array);
+    obj->values = (char **) calloc(obj->values_count, sizeof(char *));
+    if (NULL == obj->values) {
+        return;
+    }
+    for (i = 0; i < obj->values_count; ++i) {
+        str_item = cJSON_GetArrayItem(array, i);
+        if (NULL == str_item || !cJSON_IsString(str_item)) {
+            continue;
+        }
+        str_len = strlen(str_item->valuestring);
+        obj->values[i] = (char *) calloc(str_len + 1, sizeof(char));
+        if (NULL == obj->values[i]) {
+            continue;
+        }
+        memcpy(obj->values[i], str_item->valuestring, str_len);
+        obj->values[i][str_len] = '\0';
+    }
+}
+
+static void _get_key_values_list_from_json(cJSON *item, const char *key, dc_key_values ***list, int list_len) {
+    int ret = 0;
+    int i = 0;
+    cJSON *child = NULL;
+    if (NULL == item || NULL == list || !cJSON_IsObject(item)) {
+        return;
+    }
+    item = cJSON_GetObjectItem(item, key);
+    if (NULL == item) {
+        return;
+    }
+    *list = (dc_key_values **)calloc(list_len, sizeof(dc_key_values *));
+    if (NULL == *list) {
+        return;
+    }
+    child = item->child;
+    if (NULL == child) {
+        return;
+    }
+    do {
+        (*list)[i] = (dc_key_values *)calloc(1, sizeof(dc_key_values));
+        if (NULL == (*list)[i]) {
+            goto end;
+        }
+        _calloc_and_cpy_str(&(*list)[i]->key, child->string);
+        _parse_json_str_array_for_key_values(child, (*list)[i]);
+        ++i;
+        child = child->next;
+    } while (child != NULL && i < list_len);
+
+    ret = 1;
+
+    end:
+    if (!ret) {
+        if (NULL != *list) {
+            for (i = 0; i < list_len; ++i) {
+                dc_free_key_values((*list)[i]);
+            }
+        }
     }
 }
 
@@ -461,13 +568,19 @@ dc_info *dc_get_info(char *url) {
     info->containers_running = _get_int_from_json(root, "ContainersRunning");
     info->containers_paused = _get_int_from_json(root, "ContainersPaused");
     info->containers_stopped = _get_int_from_json(root, "ContainersStopped");
-    info->images = _get_int_from_json(root, "Images");
+    info->cpu_cfs_period = _get_bool_from_json(root, "CpuCfsPeriod");
+    info->cpu_cfs_quota = _get_bool_from_json(root, "CpuCfsQuota");
+    info->cpu_shares = _get_bool_from_json(root, "CPUShares");
+    info->cpu_set = _get_bool_from_json(root, "CPUSet");
+    info->debug = _get_bool_from_json(root, "Debug");
+    _calloc_and_cpy_str_from_json(&info->discovery_backend, root, "DiscoveryBackend");
+    _calloc_and_cpy_str_from_json(&info->docker_root_dir, root, "DockerRootDir");
     _calloc_and_cpy_str_from_json(&info->driver, root, "Driver");
     info->driver_statuses_count = _get_json_array_size(root, "DriverStatus");
     if (info->driver_statuses_count > 0) {
         array = cJSON_GetObjectItem(root, "DriverStatus");
         info->driver_statuses = (dc_str_array **) calloc(info->driver_statuses_count, sizeof(dc_str_array *));
-        for (i = 0;  i< info->driver_statuses_count; ++i) {
+        for (i = 0; i < info->driver_statuses_count; ++i) {
             tmp = cJSON_GetArrayItem(array, i);
             if (NULL == tmp || !cJSON_IsArray(tmp)) {
                 continue;
@@ -475,6 +588,35 @@ dc_info *dc_get_info(char *url) {
             _parse_json_str_array(tmp, &(info->driver_statuses[i]));
         }
     }
+    info->plugins_count = _get_json_sub_object_count(root, "Plugins");
+    _get_key_values_list_from_json(root, "Plugins", &info->plugins, info->plugins_count);
+    _calloc_and_cpy_str_from_json(&info->execution_driver, root, "ExecutionDriver");
+    _calloc_and_cpy_str_from_json(&info->logging_driver, root, "LoggingDriver");
+    info->experimental_build = _get_bool_from_json(root, "ExperimentalBuild");
+    _calloc_and_cpy_str_from_json(&info->http_proxy, root, "HttpProxy");
+    _calloc_and_cpy_str_from_json(&info->https_proxy, root, "HttpsProxy");
+    _calloc_and_cpy_str_from_json(&info->id, root, "ID");
+    info->ipv4_forwarding = _get_bool_from_json(root, "IPv4Forwarding");
+    info->bridge_nf_iptables - _get_bool_from_json(root, "BridgeNfIptables");
+    info->bridge_nf_ip6tables = _get_bool_from_json(root, "BridgeNfIp6tables");
+    info->images = _get_int_from_json(root, "Images");
+    _calloc_and_cpy_str_from_json(&info->index_server_address, root, "IndexServerAddress");
+    _calloc_and_cpy_str_from_json(&info->init_path, root, "InitPath");
+    _calloc_and_cpy_str_from_json(&info->init_sha1, root, "InitSha1");
+    _calloc_and_cpy_str_from_json(&info->kernel_version, root, "KernelVersion");
+    _parse_json_str_array(cJSON_GetObjectItem(root, "Labels"), &info->labels);
+    info->memory_limit = _get_bool_from_json(root, "MemoryLimit");
+    info->mem_total = _get_int_from_json(root, "MemTotal");
+    _calloc_and_cpy_str_from_json(&info->name, root, "Name");
+    info->n_cpu = _get_int_from_json(root, "NCPU");
+    info->n_events_listener = _get_int_from_json(root, "NEventsListener");
+    info->n_fd = _get_int_from_json(root, "NFd");
+    info->n_goroutines = _get_int_from_json(root, "NGoroutines");
+    _calloc_and_cpy_str_from_json(&info->no_proxy, root, "NoProxy");
+    info->oom_kill_disable = _get_bool_from_json(root, "OomKillDisable");
+    _calloc_and_cpy_str_from_json(&info->os_type, root, "OSType");
+    info->oom_score_adj = _get_int_from_json(root, "OomScoreAdj");
+    _calloc_and_cpy_str_from_json(&info->operating_system, root, "OperatingSystem");
 
 
     ret = 1;

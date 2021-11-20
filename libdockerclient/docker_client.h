@@ -89,7 +89,7 @@ typedef struct _dc_info {
     char *driver;
     dc_str_array **driver_statuses;
     int driver_statuses_count;
-    dc_key_values *plugins;
+    dc_key_values **plugins;
     int plugins_count;
     char *execution_driver;
     char *logging_driver;
@@ -105,8 +105,7 @@ typedef struct _dc_info {
     char *init_path;
     char *init_sha1;
     char *kernel_version;
-    char **labels;
-    int labels_count;
+    dc_str_array *labels;
     DC_BOOL memory_limit;
     int64_t mem_total;
     char *name;
