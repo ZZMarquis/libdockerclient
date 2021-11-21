@@ -57,18 +57,9 @@ static void _calloc_and_cpy_str(char **dst, char *src) {
     (*dst)[src_len] = '\0';
 }
 
-CURLcode get(
-        const char *url,
-        const char *unix_sock_path,
-        int conn_timeout,
-        int read_timeout,
-        const char **req_headers,
-        unsigned int req_headers_count,
-        unsigned char **resp_body,
-        unsigned int *resp_body_len,
-        unsigned char **resp_headers,
-        unsigned int *resp_headers_len
-) {
+CURLcode get(const char *url, const char *unix_sock_path, int conn_timeout, int read_timeout, const char **req_headers,
+             unsigned int req_headers_count, unsigned char **resp_body, unsigned int *resp_body_len,
+             unsigned char **resp_headers, unsigned int *resp_headers_len) {
     CURL *curl = NULL;
     CURLcode res = CURLE_OK;
     struct curl_slist *headers = NULL;
@@ -161,8 +152,7 @@ dc_ping_result *dc_ping(char *url) {
     dc_http_headers *headers = NULL;
     dc_ping_result *result = NULL;
 
-    res = get(url, NULL, 30, 30, NULL, 0, &resp_body, &resp_body_len, &resp_headers,
-              &resp_headers_len);
+    res = get(url, NULL, 30, 30, NULL, 0, &resp_body, &resp_body_len, &resp_headers, &resp_headers_len);
     if (CURLE_OK != res) {
         return NULL;
     }
@@ -279,17 +269,8 @@ void dc_free_index_config(dc_index_config *obj) {
     if (NULL == obj) {
         return;
     }
-    if (NULL != obj->mirrors && obj->mirrors_count > 0) {
-        for (i = 0; i < obj->mirrors_count; ++i) {
-            if (NULL == obj->mirrors[i]) {
-                continue;
-            }
-            free(obj->mirrors[i]);
-            obj->mirrors[i] = NULL;
-        }
-        free(obj->mirrors);
-        obj->mirrors = NULL;
-    }
+    dc_free_str_array(obj->mirrors);
+    obj->mirrors = NULL;
     if (NULL != obj->name) {
         free(obj->name);
         obj->name = NULL;
@@ -306,17 +287,8 @@ void dc_free_key_index_config(dc_key_index_config *obj) {
         free(obj->key);
         obj->key = NULL;
     }
-    if (NULL != obj->index_configs && obj->index_configs_count > 0) {
-        for (i = 0; i < obj->index_configs_count; ++i) {
-            if (NULL == obj->index_configs[i]) {
-                continue;
-            }
-            dc_free_index_config(obj->index_configs[i]);
-            obj->index_configs[i] = NULL;
-        }
-        free(obj->index_configs);
-        obj->index_configs = NULL;
-    }
+    dc_free_index_config(obj->index_config);
+    obj->index_config = NULL;
     free(obj);
 }
 
@@ -336,16 +308,242 @@ void dc_free_registry_config(dc_registry_config *obj) {
         free(obj->index_configs);
         obj->index_configs = NULL;
     }
-    if (NULL != obj->insecure_registry_cidrs && obj->insecure_registry_cidrs_count > 0) {
-        for (i = 0; i < obj->insecure_registry_cidrs_count; ++i) {
-            if (NULL == obj->insecure_registry_cidrs[i]) {
+    dc_free_str_array(obj->insecure_registry_cidrs);
+    obj->insecure_registry_cidrs = NULL;
+    free(obj);
+}
+
+void dc_free_peer_node(dc_peer_node *obj) {
+    if (NULL == obj) {
+        return;
+    }
+    if (NULL != obj->node_id) {
+        free(obj->node_id);
+        obj->node_id = NULL;
+    }
+    if (NULL != obj->addr) {
+        free(obj->addr);
+        obj->addr = NULL;
+    }
+    free(obj);
+}
+
+void dc_free_swarm_dispatcher_config(dc_swarm_dispatcher_config *obj) {
+    if (NULL == obj) {
+        return;
+    }
+    free(obj);
+}
+
+void dc_free_swarm_orchestration(dc_swarm_orchestration *obj) {
+    if (NULL == obj) {
+        return;
+    }
+    free(obj);
+}
+
+void dc_free_key_value(dc_key_value *obj) {
+    if (NULL == obj) {
+        return;
+    }
+    if (NULL != obj->key) {
+        free(obj->key);
+        obj->key = NULL;
+    }
+    if (NULL != obj->value) {
+        free(obj->value);
+        obj->value = NULL;
+    }
+    free(obj);
+}
+
+void dc_free_external_ca(dc_external_ca *obj) {
+    int i = 0;
+    if (NULL == obj) {
+        return;
+    }
+    if (NULL != obj->url) {
+        free(obj->url);
+        obj->url = NULL;
+    }
+    if (NULL != obj->options && obj->options_count > 0) {
+        for (i = 0; i < obj->options_count; ++i) {
+            if (NULL == obj->options[i]) {
                 continue;
             }
-            free(obj->insecure_registry_cidrs[i]);
-            obj->insecure_registry_cidrs[i] = NULL;
+            dc_free_key_value(obj->options[i]);
+            obj->options[i] = NULL;
         }
-        free(obj->insecure_registry_cidrs);
-        obj->insecure_registry_cidrs = NULL;
+        free(obj->options);
+        obj->options = NULL;
+    }
+    if (NULL != obj->protocol) {
+        free(obj->protocol);
+        obj->protocol = NULL;
+    }
+    free(obj);
+}
+
+void dc_free_swarm_ca_config(dc_swarm_ca_config *obj) {
+    int i = 0;
+    if (NULL == obj) {
+        return;
+    }
+    if (NULL != obj->external_ca_list && obj->external_ca_count > 0) {
+        for (i = 0; i < obj->external_ca_count; ++i) {
+            if (NULL == obj->external_ca_list[i]) {
+                continue;
+            }
+            dc_free_external_ca(obj->external_ca_list[i]);
+            obj->external_ca_list[i] = NULL;
+        }
+        free(obj->external_ca_list);
+        obj->external_ca_list = NULL;
+    }
+    free(obj);
+}
+
+void dc_free_swarm_raft_config(dc_swarm_raft_config *obj) {
+    if (NULL == obj) {
+        return;
+    }
+    free(obj);
+}
+
+void dc_free_driver(dc_driver *obj) {
+    int i = 0;
+    if (NULL == obj) {
+        return;
+    }
+    if (NULL != obj->name) {
+        free(obj->name);
+        obj->name = NULL;
+    }
+    if (NULL != obj->options && obj->options_count > 0) {
+        for (i = 0; i < obj->options_count; ++i) {
+            if (NULL == obj->options[i]) {
+                continue;
+            }
+            dc_free_key_value(obj->options[i]);
+            obj->options[i] = NULL;
+        }
+        free(obj->options);
+        obj->options = NULL;
+    }
+    free(obj);
+}
+
+void dc_free_task_defaults(dc_task_defaults *obj) {
+    if (NULL == obj) {
+        return;
+    }
+    if (NULL != obj->log_driver) {
+        dc_free_driver(obj->log_driver);
+        obj->log_driver = NULL;
+    }
+    free(obj);
+}
+
+void dc_free_swarm_spec(dc_swarm_spec *obj) {
+    if (NULL == obj) {
+        return;
+    }
+    if (NULL != obj->name) {
+        free(obj->name);
+        obj->name = NULL;
+    }
+    if (NULL != obj->ca_config) {
+        dc_free_swarm_ca_config(obj->ca_config);
+        obj->ca_config = NULL;
+    }
+    if (NULL != obj->dispatcher) {
+        dc_free_swarm_dispatcher_config(obj->dispatcher);
+        obj->dispatcher = NULL;
+    }
+    if (NULL != obj->orchestration) {
+        dc_free_swarm_orchestration(obj->orchestration);
+        obj->orchestration = NULL;
+    }
+    if (NULL != obj->raft) {
+        dc_free_swarm_raft_config(obj->raft);
+        obj->raft = NULL;
+    }
+    if (NULL != obj->task_defaults) {
+        dc_free_task_defaults(obj->task_defaults);
+        obj->task_defaults = NULL;
+    }
+    free(obj);
+}
+
+void dc_free_resource_version(dc_resource_version *obj) {
+    if (NULL == obj) {
+        return;
+    }
+    free(obj);
+}
+
+void dc_free_cluster_info(dc_cluster_info *obj) {
+    if (NULL == obj) {
+        return;
+    }
+    if (NULL != obj->version) {
+        dc_free_resource_version(obj->version);
+        obj->version = NULL;
+    }
+    if (NULL != obj->id) {
+        free(obj->id);
+        obj->id = NULL;
+    }
+    if (NULL != obj->created_at) {
+        free(obj->created_at);
+        obj->created_at = NULL;
+    }
+    if (NULL != obj->spec) {
+        dc_free_swarm_spec(obj->spec);
+        obj->spec = NULL;
+    }
+    if (NULL != obj->update_at) {
+        free(obj->update_at);
+        obj->update_at = NULL;
+    }
+    free(obj);
+}
+
+void dc_free_swarm_info(dc_swarm_info *obj) {
+    int i = 0;
+    if (NULL == obj) {
+        return;
+    }
+    if (NULL != obj->node_id) {
+        free(obj->node_id);
+        obj->node_id = NULL;
+    }
+    if (NULL != obj->local_node_statel) {
+        free(obj->local_node_statel);
+        obj->local_node_statel = NULL;
+    }
+    if (NULL != obj->node_addr) {
+        free(obj->node_addr);
+        obj->node_addr = NULL;
+    }
+    if (NULL != obj->cluster_info) {
+        dc_free_cluster_info(obj->cluster_info);
+        obj->cluster_info = NULL;
+    }
+    if (NULL != obj->error) {
+        free(obj->error);
+        obj->error = NULL;
+    }
+    if (NULL != obj->remote_managers && obj->remote_managers_count > 0) {
+        for (i = 0; i < obj->remote_managers_count; ++i) {
+            if (NULL == obj->remote_managers[i]) {
+                continue;
+            }
+            dc_free_peer_node(obj->remote_managers[i]);
+            obj->remote_managers[i] = NULL;
+        }
+        free(obj->remote_managers);
+        obj->remote_managers = NULL;
     }
     free(obj);
 }
@@ -503,7 +701,7 @@ static void _get_key_values_list_from_json(cJSON *item, const char *key, dc_key_
     if (NULL == item) {
         return;
     }
-    *list = (dc_key_values **)calloc(list_len, sizeof(dc_key_values *));
+    *list = (dc_key_values **) calloc(list_len, sizeof(dc_key_values *));
     if (NULL == *list) {
         return;
     }
@@ -512,7 +710,7 @@ static void _get_key_values_list_from_json(cJSON *item, const char *key, dc_key_
         return;
     }
     do {
-        (*list)[i] = (dc_key_values *)calloc(1, sizeof(dc_key_values));
+        (*list)[i] = (dc_key_values *) calloc(1, sizeof(dc_key_values));
         if (NULL == (*list)[i]) {
             goto end;
         }
@@ -530,6 +728,422 @@ static void _get_key_values_list_from_json(cJSON *item, const char *key, dc_key_
             for (i = 0; i < list_len; ++i) {
                 dc_free_key_values((*list)[i]);
             }
+        }
+    }
+}
+
+static void _get_key_index_configs_from_json(cJSON *item, const char *key, dc_key_index_config **list, int list_len) {
+    int ret = 0;
+    int i = 0;
+    cJSON *child = NULL;
+    if (NULL == item || NULL == list || !cJSON_IsObject(item)) {
+        return;
+    }
+    item = cJSON_GetObjectItem(item, key);
+    if (NULL == item) {
+        return;
+    }
+    child = item->child;
+    if (NULL == child) {
+        return;
+    }
+    do {
+        list[i] = (dc_key_index_config *) calloc(1, sizeof(dc_key_index_config));
+        if (NULL == list[i]) {
+            goto end;
+        }
+        _calloc_and_cpy_str(&list[i]->key, child->string);
+        list[i]->index_config = (dc_index_config *) calloc(1, sizeof(dc_index_config));
+        if (NULL == list[i]->index_config) {
+            goto end;
+        }
+        _calloc_and_cpy_str_from_json(&list[i]->index_config->name, child, "Name");
+        list[i]->index_config->official = _get_bool_from_json(child, "Official");
+        list[i]->index_config->secure = _get_bool_from_json(child, "Secure");
+        _parse_json_str_array(cJSON_GetObjectItem(child, "Mirrors"), &list[i]->index_config->mirrors);
+        ++i;
+        child = child->next;
+    } while (child != NULL && i < list_len);
+
+    ret = 1;
+
+    end:
+    if (!ret) {
+        for (i = 0; i < list_len; ++i) {
+            dc_free_key_index_config(list[i]);
+        }
+    }
+}
+
+static void _parse_registry_config(cJSON *item, const char *key, dc_registry_config **registry_config) {
+    int ret = 0;
+    int i = 0;
+    cJSON *sub = NULL;
+    if (NULL == item || NULL == registry_config) {
+        return;
+    }
+    sub = cJSON_GetObjectItem(item, key);
+    if (NULL == sub) {
+        return;
+    }
+
+    *registry_config = (dc_registry_config *) calloc(1, sizeof(dc_registry_config));
+    if (NULL == *registry_config) {
+        return;
+    }
+    (*registry_config)->index_configs_count = _get_json_sub_object_count(item, key);
+    (*registry_config)->index_configs = (dc_key_index_config **) calloc((*registry_config)->index_configs_count,
+                                                                        sizeof(dc_key_index_config *));
+    if (NULL == (*registry_config)->index_configs) {
+        goto end;
+    }
+    _get_key_index_configs_from_json(sub, "IndexConfigs", (*registry_config)->index_configs,
+                                     (*registry_config)->index_configs_count);
+    _parse_json_str_array(cJSON_GetObjectItem(sub, "InsecureRegistryCIDRs"),
+                          &(*registry_config)->insecure_registry_cidrs);
+
+    ret = 1;
+
+    end:
+    if (!ret) {
+        dc_free_registry_config(*registry_config);
+    }
+}
+
+static void _parse_peer_node_list(cJSON *array, dc_peer_node ***list, int list_len) {
+    int ret = 0;
+    int i = 0;
+    dc_peer_node **tmp_list = NULL;
+    cJSON *arr_item = NULL;
+    if (NULL == array || !cJSON_IsArray(array) || NULL == list || list_len <= 0) {
+        return;
+    }
+
+    *list = (dc_peer_node **) calloc(list_len, sizeof(dc_peer_node *));
+    tmp_list = *list;
+    if (NULL == tmp_list) {
+        goto end;
+    }
+    for (i = 0; i < list_len; ++i) {
+        tmp_list[i] = (dc_peer_node *) calloc(1, sizeof(dc_peer_node));
+        if (NULL == tmp_list[i]) {
+            goto end;
+        }
+        arr_item = cJSON_GetArrayItem(array, i);
+        _calloc_and_cpy_str_from_json(&tmp_list[i]->node_id, arr_item, "NodeID");
+        _calloc_and_cpy_str_from_json(&tmp_list[i]->node_id, arr_item, "Addr");
+    }
+
+    ret = 1;
+
+    end:
+    if (!ret) {
+        if (NULL != tmp_list) {
+            for (i = 0; i < list_len; ++i) {
+                if (NULL != tmp_list[i]) {
+                    dc_free_peer_node(tmp_list[i]);
+                    tmp_list[i] = NULL;
+                }
+            }
+            free(*list);
+            *list = NULL;
+        }
+    }
+}
+
+static void _parse_json_obj_for_key_value_list(cJSON *item, const char *key, dc_key_value ***list, int *list_len) {
+    int ret = 0;
+    int i = 0;
+    cJSON *sub = NULL;
+    cJSON *child = NULL;
+    dc_key_value **tmp_list = NULL;
+    if (NULL == item || NULL == list || NULL == list_len) {
+        return;
+    }
+    sub = cJSON_GetObjectItem(item, key);
+    if (NULL == sub || !cJSON_IsObject(sub)) {
+        return;
+    }
+
+    child = sub->child;
+    if (NULL == child) {
+        return;
+    }
+    *list_len = 0;
+    do {
+        ++(*list_len);
+        child = child->next;
+    } while (NULL != child);
+
+    if ((*list_len) > 0) {
+        *list = (dc_key_value **) calloc(*list_len, sizeof(dc_key_value *));
+        tmp_list = *list;
+        if (NULL == tmp_list) {
+            goto end;
+        }
+
+        child = sub->child;
+        do {
+            tmp_list[i] = (dc_key_value *) calloc(1, sizeof(dc_key_value));
+            if (NULL == tmp_list[i]) {
+                goto end;
+            }
+            if (cJSON_IsString(child)) {
+                _calloc_and_cpy_str(&tmp_list[i]->key, child->string);
+                _calloc_and_cpy_str(&tmp_list[i]->value, child->valuestring);
+            }
+            child = child->next;
+        } while (NULL != child);
+    }
+
+    ret = 1;
+
+    end:
+    if (!ret) {
+        if (NULL != *list) {
+            for (i = 0; i < *list_len; ++i) {
+                if (NULL == tmp_list[i]) {
+                    dc_free_key_value(tmp_list[i]);
+                    tmp_list[i] = NULL;
+                }
+            }
+            free(*list);
+            *list = NULL;
+        }
+    }
+}
+
+static void _parse_task_defaults(cJSON *item, const char *key, dc_task_defaults **task_defaults) {
+    int ret = 0;
+    cJSON *sub = NULL;
+    cJSON *log_driver = NULL;
+    cJSON *tmp = NULL;
+    if (NULL == item || NULL == task_defaults) {
+        return;
+    }
+    sub = cJSON_GetObjectItem(item, key);
+    if (NULL == sub || !cJSON_IsObject(sub)) {
+        return;
+    }
+
+    *task_defaults = (dc_task_defaults *) calloc(1, sizeof(dc_task_defaults));
+    if (NULL != *task_defaults) {
+        return;
+    }
+
+    log_driver = cJSON_GetObjectItem(sub, "LogDriver");
+    if (NULL != log_driver) {
+        (*task_defaults)->log_driver = (dc_driver *) calloc(1, sizeof(dc_driver));
+        if (NULL == (*task_defaults)->log_driver) {
+            goto end;
+        }
+        _calloc_and_cpy_str_from_json(&(*task_defaults)->log_driver->name, log_driver, "Name");
+        _parse_json_obj_for_key_value_list(log_driver, "Options", &(*task_defaults)->log_driver->options,
+                                           &(*task_defaults)->log_driver->options_count);
+    }
+
+    ret = 1;
+
+    end:
+    if (!ret) {
+        if (NULL != *task_defaults) {
+            dc_free_task_defaults(*task_defaults);
+            *task_defaults = NULL;
+        }
+    }
+}
+
+static void _parse_swarm_ca_config(cJSON *item, const char *key, dc_swarm_ca_config **ca_config) {
+    int ret = 0;
+    int i = 0;
+    cJSON *sub = NULL;
+    cJSON *ca_arr = NULL;
+    cJSON *tmp = NULL;
+    if (NULL == item || NULL == ca_config) {
+        return;
+    }
+    sub = cJSON_GetObjectItem(item, key);
+    if (NULL == sub || !cJSON_IsObject(sub)) {
+        return;
+    }
+
+    *ca_config = (dc_swarm_ca_config *) calloc(1, sizeof(dc_swarm_ca_config));
+    if (NULL != *ca_config) {
+        return;
+    }
+
+    (*ca_config)->node_cert_expiry = _get_int_from_json(sub, "NodeCertExpiry");
+    ca_arr = cJSON_GetObjectItem(sub, "ExternalCAs");
+    if (NULL != ca_arr) {
+        (*ca_config)->external_ca_count = cJSON_GetArraySize(ca_arr);
+        if ((*ca_config)->external_ca_count > 0) {
+            (*ca_config)->external_ca_list = (dc_external_ca **) calloc((*ca_config)->external_ca_count, sizeof(dc_external_ca *));
+            if (NULL == (*ca_config)->external_ca_list) {
+                goto end;
+            }
+            for (i = 0; i < (*ca_config)->external_ca_count; ++i) {
+                tmp = cJSON_GetArrayItem(sub, i);
+                if (NULL == tmp) {
+                    continue;
+                }
+                (*ca_config)->external_ca_list[i] = (dc_external_ca *) calloc(1, sizeof(dc_external_ca));
+                _calloc_and_cpy_str_from_json(&(*ca_config)->external_ca_list[i]->protocol, tmp, "Protocol");
+                _calloc_and_cpy_str_from_json(&(*ca_config)->external_ca_list[i]->url, tmp, "URL");
+                _parse_json_obj_for_key_value_list(tmp, "Options", &(*ca_config)->external_ca_list[i]->options, &(*ca_config)->external_ca_list[i]->options_count);
+            }
+        }
+    }
+
+    end:
+    if (!ret) {
+        if (NULL != *ca_config) {
+            dc_free_swarm_ca_config(*ca_config);
+            *ca_config = NULL;
+        }
+    }
+}
+
+
+static void _parse_swarm_spec(cJSON *item, const char *key, dc_swarm_spec **swarm_spec) {
+    int ret = 0;
+    cJSON *sub = NULL;
+    cJSON *tmp = NULL;
+    if (NULL == item || NULL == swarm_spec) {
+        return;
+    }
+    sub = cJSON_GetObjectItem(item, key);
+    if (NULL == sub || !cJSON_IsObject(sub)) {
+        return;
+    }
+
+    *swarm_spec = (dc_swarm_spec *) calloc(1, sizeof(dc_swarm_spec));
+    if (NULL == *swarm_spec) {
+        return;
+    }
+
+    _calloc_and_cpy_str_from_json(&(*swarm_spec)->name, sub, "Name");
+    tmp = cJSON_GetObjectItem(sub, "Dispatcher");
+    if (NULL != tmp) {
+        (*swarm_spec)->dispatcher = (dc_swarm_dispatcher_config *) calloc(1, sizeof(dc_swarm_dispatcher_config));
+        if (NULL == (*swarm_spec)->dispatcher) {
+            goto end;
+        }
+        (*swarm_spec)->dispatcher->heartbeat_period = _get_int_from_json(tmp, "HeartbeatPeriod");
+    }
+    tmp = cJSON_GetObjectItem(sub, "Orchestration");
+    if (NULL != tmp) {
+        (*swarm_spec)->orchestration = (dc_swarm_orchestration *) calloc(1, sizeof(dc_swarm_orchestration));
+        if (NULL == (*swarm_spec)->orchestration) {
+            goto end;
+        }
+        (*swarm_spec)->orchestration->task_history_rentention_limit = _get_int_from_json(tmp,
+                                                                                         "TaskHistoryRetentionLimit");
+    }
+    tmp = cJSON_GetObjectItem(sub, "Raft");
+    if (NULL != tmp) {
+        (*swarm_spec)->raft = (dc_swarm_raft_config *) calloc(1, sizeof(dc_swarm_raft_config));
+        if (NULL == (*swarm_spec)->raft) {
+            goto end;
+        }
+        (*swarm_spec)->raft->log_entries_for_slow_followers = _get_int_from_json(tmp, "LogEntriesForSlowFollowers");
+        (*swarm_spec)->raft->heartbeat_tick = _get_int_from_json(tmp, "HeartbeatTick");
+        (*swarm_spec)->raft->snapshot_interval = _get_int_from_json(tmp, "SnapshotInterval");
+        (*swarm_spec)->raft->election_tick = _get_int_from_json(tmp, "ElectionTick");
+    }
+    _parse_task_defaults(sub, "TaskDefaults", &(*swarm_spec)->task_defaults);
+    _parse_swarm_ca_config(sub, "CAConfig", &(*swarm_spec)->ca_config);
+
+    ret = 1;
+
+    end:
+    if (!ret) {
+        if (NULL != *swarm_spec) {
+            dc_free_swarm_spec(*swarm_spec);
+            *swarm_spec = NULL;
+        }
+    }
+}
+
+static void _parse_cluster_info(cJSON *item, const char *key, dc_cluster_info **cluster_info) {
+    int ret = 0;
+    cJSON *sub = NULL;
+    cJSON *tmp = NULL;
+    if (NULL == item || NULL == cluster_info) {
+        return;
+    }
+    sub = cJSON_GetObjectItem(item, key);
+    if (NULL == sub) {
+        return;
+    }
+
+    *cluster_info = (dc_cluster_info *) calloc(1, sizeof(cluster_info));
+    if (NULL == *cluster_info) {
+        return;
+    }
+
+    _calloc_and_cpy_str_from_json(&(*cluster_info)->created_at, sub, "CreatedAt");
+    _calloc_and_cpy_str_from_json(&(*cluster_info)->update_at, sub, "UpdatedAt");
+    _calloc_and_cpy_str_from_json(&(*cluster_info)->id, sub, "ID");
+    tmp = cJSON_GetObjectItem(sub, "Version");
+    if (NULL != tmp) {
+        (*cluster_info)->version = (dc_resource_version *) calloc(1, sizeof(dc_resource_version));
+        if (NULL == (*cluster_info)->version) {
+            goto end;
+        }
+        (*cluster_info)->version->index = _get_int_from_json(tmp, "Index");
+    }
+    _parse_swarm_spec(sub, "Spec", &(*cluster_info)->spec);
+
+    ret = 1;
+
+    end:
+    if (!ret) {
+        if (NULL != *cluster_info) {
+            dc_free_cluster_info(*cluster_info);
+            *cluster_info = NULL;
+        }
+    }
+}
+
+static void _parse_swarm_info(cJSON *item, const char *key, dc_swarm_info **swarm_info) {
+    int ret = 0;
+    int i = 0;
+    cJSON *sub = NULL;
+    cJSON *array = NULL;
+    cJSON *arr_item = NULL;
+    if (NULL == item || NULL == swarm_info) {
+        return;
+    }
+    sub = cJSON_GetObjectItem(item, key);
+    if (NULL == sub) {
+        return;
+    }
+
+    *swarm_info = (dc_swarm_info *) calloc(1, sizeof(swarm_info));
+    if (NULL == *swarm_info) {
+        return;
+    }
+
+    _calloc_and_cpy_str_from_json(&(*swarm_info)->node_id, sub, "NodeID");
+    _calloc_and_cpy_str_from_json(&(*swarm_info)->node_addr, sub, "NodeAddr");
+    _calloc_and_cpy_str_from_json(&(*swarm_info)->local_node_statel, sub, "LocalNodeState");
+    _calloc_and_cpy_str_from_json(&(*swarm_info)->error, sub, "Error");
+    (*swarm_info)->nodes = _get_int_from_json(sub, "Nodes");
+    (*swarm_info)->managers = _get_int_from_json(sub, "Managers");
+    array = cJSON_GetObjectItem(sub, "RemoteManagers");
+    if (NULL != array) {
+        (*swarm_info)->remote_managers_count = cJSON_GetArraySize(array);
+        _parse_peer_node_list(array, &(*swarm_info)->remote_managers, (*swarm_info)->remote_managers_count);
+    }
+    _parse_cluster_info(sub, "ClusterInfo", &(*swarm_info)->cluster_info);
+
+    ret = 1;
+
+    end:
+    if (!ret) {
+        if (NULL != *swarm_info) {
+            dc_free_swarm_info(*swarm_info);
+            *swarm_info = NULL;
         }
     }
 }
@@ -617,7 +1231,16 @@ dc_info *dc_get_info(char *url) {
     _calloc_and_cpy_str_from_json(&info->os_type, root, "OSType");
     info->oom_score_adj = _get_int_from_json(root, "OomScoreAdj");
     _calloc_and_cpy_str_from_json(&info->operating_system, root, "OperatingSystem");
-
+    _parse_registry_config(root, "RegistryConfig", &info->registry_config);
+    _parse_json_str_array(cJSON_GetObjectItem(root, "Sockets"), &info->sockets);
+    info->swap_limit = _get_bool_from_json(root, "SwapLimit");
+    _calloc_and_cpy_str_from_json(&info->system_time, root, "SystemTime");
+    _calloc_and_cpy_str_from_json(&info->server_version, root, "ServerVersion");
+    _calloc_and_cpy_str_from_json(&info->cluster_store, root, "ClusterStore");
+    _calloc_and_cpy_str_from_json(&info->cluster_advertise, root, "ClusterAdvertise");
+    _parse_swarm_info(root, "Swarm", &info->swarm);
+    _calloc_and_cpy_str_from_json(&info->isolation, root, "Isolation");
+    _parse_json_str_array(cJSON_GetObjectItem(root, "SecurityOptions"), &info->security_options);
 
     ret = 1;
 

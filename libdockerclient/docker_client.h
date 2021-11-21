@@ -4,18 +4,9 @@
 #include "curl/curl.h"
 #include "dc_defines.h"
 
-CURLcode get(
-        const char *url,
-        const char *unix_sock_path,
-        int conn_timeout,
-        int read_timeout,
-        const char **req_headers,
-        unsigned int req_headers_count,
-        unsigned char **resp_body,
-        unsigned int *resp_body_len,
-        unsigned char **resp_headers,
-        unsigned int *resp_headers_len
-);
+CURLcode get(const char *url, const char *unix_sock_path, int conn_timeout, int read_timeout, const char **req_headers,
+             unsigned int req_headers_count, unsigned char **resp_body, unsigned int *resp_body_len,
+             unsigned char **resp_headers, unsigned int *resp_headers_len);
 
 typedef struct _dc_ping_result {
     char *api_version;
@@ -47,8 +38,7 @@ typedef struct _dc_key_values {
 void dc_free_key_values(dc_key_values *obj);
 
 typedef struct _dc_index_config {
-    char **mirrors;
-    int mirrors_count;
+    dc_str_array *mirrors;
     char *name;
     DC_BOOL official;
     DC_BOOL secure;
@@ -57,9 +47,8 @@ typedef struct _dc_index_config {
 void dc_free_index_config(dc_index_config *obj);
 
 typedef struct _dc_key_index_config {
-  char *key;
-  dc_index_config **index_configs;
-  int index_configs_count;
+    char *key;
+    dc_index_config *index_config;
 } dc_key_index_config;
 
 void dc_free_key_index_config(dc_key_index_config *obj);
@@ -67,11 +56,118 @@ void dc_free_key_index_config(dc_key_index_config *obj);
 typedef struct _dc_registry_config {
     dc_key_index_config **index_configs;
     int index_configs_count;
-    char **insecure_registry_cidrs;
-    int insecure_registry_cidrs_count;
+    dc_str_array *insecure_registry_cidrs;
 } dc_registry_config;
 
 void dc_free_registry_config(dc_registry_config *obj);
+
+typedef struct _dc_peer_node {
+    char *node_id;
+    char *addr;
+} dc_peer_node;
+
+void dc_free_peer_node(dc_peer_node *obj);
+
+typedef struct _dc_swarm_dispatcher_config {
+    int64_t heartbeat_period;
+} dc_swarm_dispatcher_config;
+
+void dc_free_swarm_dispatcher_config(dc_swarm_dispatcher_config *obj);
+
+typedef struct _dc_swarm_orchestration {
+    int task_history_rentention_limit;
+} dc_swarm_orchestration;
+
+void dc_free_swarm_orchestration(dc_swarm_orchestration *obj);
+
+typedef struct _dc_key_value {
+    char *key;
+    char *value;
+} dc_key_value;
+
+void dc_free_key_value(dc_key_value *obj);
+
+typedef struct _dc_external_ca {
+    char *protocol;
+    char *url;
+    dc_key_value **options;
+    int options_count;
+} dc_external_ca;
+
+void dc_free_external_ca(dc_external_ca *obj);
+
+typedef struct _dc_swarm_ca_config {
+    int64_t node_cert_expiry;
+    dc_external_ca **external_ca_list;
+    int external_ca_count;
+} dc_swarm_ca_config;
+
+void dc_free_swarm_ca_config(dc_swarm_ca_config *obj);
+
+typedef struct _dc_swarm_raft_config {
+    int64_t log_entries_for_slow_followers;
+    int heartbeat_tick;
+    int64_t snapshot_interval;
+    int election_tick;
+} dc_swarm_raft_config;
+
+void dc_free_swarm_raft_config(dc_swarm_raft_config *obj);
+
+typedef struct _dc_driver {
+    char *name;
+    dc_key_value **options;
+    int options_count;
+} dc_driver;
+
+void dc_free_driver(dc_driver *obj);
+
+typedef struct _dc_task_defaults {
+    dc_driver *log_driver;
+} dc_task_defaults;
+
+void dc_free_task_defaults(dc_task_defaults *obj);
+
+typedef struct _dc_swarm_spec {
+    dc_swarm_dispatcher_config *dispatcher;
+    dc_swarm_orchestration *orchestration;
+    dc_swarm_ca_config *ca_config;
+    dc_swarm_raft_config *raft;
+    dc_task_defaults *task_defaults;
+    char *name;
+} dc_swarm_spec;
+
+void dc_free_swarm_spec(dc_swarm_spec *obj);
+
+typedef struct _dc_resource_version {
+    int64_t index;
+} dc_resource_version;
+
+void dc_free_resource_version(dc_resource_version *obj);
+
+typedef struct _dc_cluster_info {
+    char *created_at;
+    dc_swarm_spec *spec;
+    char *id;
+    char *update_at;
+    dc_resource_version *version;
+} dc_cluster_info;
+
+void dc_free_cluster_info(dc_cluster_info *obj);
+
+typedef struct _dc_swarm_info {
+    char *node_id;
+    char *node_addr;
+    char *local_node_statel;
+    DC_BOOL control_available;
+    char *error;
+    dc_peer_node **remote_managers;
+    int remote_managers_count;
+    int nodes;
+    int managers;
+    dc_cluster_info *cluster_info;
+} dc_swarm_info;
+
+void dc_free_swarm_info(dc_swarm_info *obj);
 
 typedef struct _dc_info {
     char *architecture;
@@ -119,17 +215,15 @@ typedef struct _dc_info {
     int oom_score_adj;
     char *operating_system;
     dc_registry_config *registry_config;
-    char **sockets;
-    int sockets_count;
+    dc_str_array *sockets;
     DC_BOOL swap_limit;
     char *system_time;
     char *server_version;
     char *cluster_store;
     char *cluster_advertise;
-    char *swarm;
+    dc_swarm_info *swarm;
     char *isolation;
-    char **security_options;
-    int security_options_count;
+    dc_str_array *security_options;
 } dc_info;
 
 dc_info *dc_get_info(char *url);
