@@ -53,8 +53,10 @@ static void _calloc_and_cpy_str(char **dst, char *src) {
     if (NULL == *dst) {
         return;
     }
-    memcpy(*dst, src, src_len);
-    (*dst)[src_len] = '\0';
+    if (src_len > 0) {
+        memcpy(*dst, src, src_len);
+        (*dst)[src_len] = '\0';
+    }
 }
 
 CURLcode get(const char *url, const char *unix_sock_path, int conn_timeout, int read_timeout, const char **req_headers,
@@ -977,7 +979,8 @@ static void _parse_swarm_ca_config(cJSON *item, const char *key, dc_swarm_ca_con
     if (NULL != ca_arr) {
         (*ca_config)->external_ca_count = cJSON_GetArraySize(ca_arr);
         if ((*ca_config)->external_ca_count > 0) {
-            (*ca_config)->external_ca_list = (dc_external_ca **) calloc((*ca_config)->external_ca_count, sizeof(dc_external_ca *));
+            (*ca_config)->external_ca_list = (dc_external_ca **) calloc((*ca_config)->external_ca_count,
+                                                                        sizeof(dc_external_ca *));
             if (NULL == (*ca_config)->external_ca_list) {
                 goto end;
             }
@@ -989,7 +992,8 @@ static void _parse_swarm_ca_config(cJSON *item, const char *key, dc_swarm_ca_con
                 (*ca_config)->external_ca_list[i] = (dc_external_ca *) calloc(1, sizeof(dc_external_ca));
                 _calloc_and_cpy_str_from_json(&(*ca_config)->external_ca_list[i]->protocol, tmp, "Protocol");
                 _calloc_and_cpy_str_from_json(&(*ca_config)->external_ca_list[i]->url, tmp, "URL");
-                _parse_json_obj_for_key_value_list(tmp, "Options", &(*ca_config)->external_ca_list[i]->options, &(*ca_config)->external_ca_list[i]->options_count);
+                _parse_json_obj_for_key_value_list(tmp, "Options", &(*ca_config)->external_ca_list[i]->options,
+                                                   &(*ca_config)->external_ca_list[i]->options_count);
             }
         }
     }
@@ -1111,6 +1115,7 @@ static void _parse_swarm_info(cJSON *item, const char *key, dc_swarm_info **swar
     cJSON *sub = NULL;
     cJSON *array = NULL;
     cJSON *arr_item = NULL;
+    dc_swarm_info *tmp_swarm = NULL;
     if (NULL == item || NULL == swarm_info) {
         return;
     }
@@ -1119,33 +1124,34 @@ static void _parse_swarm_info(cJSON *item, const char *key, dc_swarm_info **swar
         return;
     }
 
-    *swarm_info = (dc_swarm_info *) calloc(1, sizeof(swarm_info));
-    if (NULL == *swarm_info) {
+    tmp_swarm = (dc_swarm_info *) calloc(1, sizeof(dc_swarm_info));
+    if (NULL == tmp_swarm) {
         return;
     }
 
-    _calloc_and_cpy_str_from_json(&(*swarm_info)->node_id, sub, "NodeID");
-    _calloc_and_cpy_str_from_json(&(*swarm_info)->node_addr, sub, "NodeAddr");
-    _calloc_and_cpy_str_from_json(&(*swarm_info)->local_node_statel, sub, "LocalNodeState");
-    _calloc_and_cpy_str_from_json(&(*swarm_info)->error, sub, "Error");
-    (*swarm_info)->nodes = _get_int_from_json(sub, "Nodes");
-    (*swarm_info)->managers = _get_int_from_json(sub, "Managers");
+    _calloc_and_cpy_str_from_json(&tmp_swarm->node_id, sub, "NodeID");
+    _calloc_and_cpy_str_from_json(&tmp_swarm->node_addr, sub, "NodeAddr");
+    _calloc_and_cpy_str_from_json(&tmp_swarm->local_node_statel, sub, "LocalNodeState");
+    _calloc_and_cpy_str_from_json(&tmp_swarm->error, sub, "Error");
+    tmp_swarm->nodes = _get_int_from_json(sub, "Nodes");
+    tmp_swarm->managers = _get_int_from_json(sub, "Managers");
     array = cJSON_GetObjectItem(sub, "RemoteManagers");
     if (NULL != array) {
-        (*swarm_info)->remote_managers_count = cJSON_GetArraySize(array);
-        _parse_peer_node_list(array, &(*swarm_info)->remote_managers, (*swarm_info)->remote_managers_count);
+        tmp_swarm->remote_managers_count = cJSON_GetArraySize(array);
+        _parse_peer_node_list(array, &tmp_swarm->remote_managers, tmp_swarm->remote_managers_count);
     }
-    _parse_cluster_info(sub, "ClusterInfo", &(*swarm_info)->cluster_info);
+    _parse_cluster_info(sub, "ClusterInfo", tmp_swarm->cluster_info);
 
     ret = 1;
 
     end:
     if (!ret) {
-        if (NULL != *swarm_info) {
-            dc_free_swarm_info(*swarm_info);
-            *swarm_info = NULL;
+        if (NULL != tmp_swarm) {
+            dc_free_swarm_info(tmp_swarm);
+            tmp_swarm = NULL;
         }
     }
+    *swarm_info = tmp_swarm;
 }
 
 dc_info *dc_get_info(char *url) {
@@ -1246,7 +1252,7 @@ dc_info *dc_get_info(char *url) {
 
     end:
     if (!ret) {
-        // TODO free dc_info
+        dc_free_info(info);
         info = NULL;
     }
     if (NULL != resp_body) {
@@ -1256,4 +1262,142 @@ dc_info *dc_get_info(char *url) {
         cJSON_free(root);
     }
     return info;
+}
+
+void dc_free_info(dc_info *obj) {
+    int i = 0;
+    if (NULL == obj) {
+        return;
+    }
+    if (NULL != obj->architecture) {
+        free(obj->architecture);
+        obj->architecture = NULL;
+    }
+    if (NULL != obj->discovery_backend) {
+        free(obj->discovery_backend);
+        obj->discovery_backend = NULL;
+    }
+    if (NULL != obj->docker_root_dir) {
+        free(obj->docker_root_dir);
+        obj->docker_root_dir = NULL;
+    }
+    if (NULL != obj->driver) {
+        free(obj->driver);
+        obj->driver = NULL;
+    }
+    if (NULL != obj->driver_statuses) {
+        for (i = 0; i < obj->driver_statuses_count; ++i) {
+            if (NULL == obj->driver_statuses[i]) {
+                continue;
+            }
+            dc_free_str_array(obj->driver_statuses[i]);
+            obj->driver_statuses[i] = NULL;
+        }
+        free(obj->driver_statuses);
+        obj->driver_statuses = NULL;
+    }
+    if (NULL != obj->plugins) {
+        for (i = 0; i < obj->plugins_count; ++i) {
+            if (NULL == obj->plugins) {
+                continue;
+            }
+            dc_free_key_values(obj->plugins[i]);
+            obj->plugins[i] = NULL;
+        }
+        free(obj->plugins);
+        obj->plugins = NULL;
+    }
+    if (NULL != obj->execution_driver) {
+        free(obj->execution_driver);
+        obj->execution_driver = NULL;
+    }
+    if (NULL != obj->logging_driver) {
+        free(obj->logging_driver);
+        obj->logging_driver = NULL;
+    }
+    if (NULL != obj->http_proxy) {
+        free(obj->http_proxy);
+        obj->http_proxy = NULL;
+    }
+    if (NULL != obj->https_proxy) {
+        free(obj->https_proxy);
+        obj->https_proxy = NULL;
+    }
+    if (NULL != obj->id) {
+        free(obj->id);
+        obj->id = NULL;
+    }
+    if (NULL != obj->index_server_address) {
+        free(obj->index_server_address);
+        obj->index_server_address = NULL;
+    }
+    if (NULL != obj->init_path) {
+        free(obj->init_path);
+        obj->init_path = NULL;
+    }
+    if (NULL != obj->init_sha1) {
+        free(obj->init_sha1);
+        obj->init_sha1 = NULL;
+    }
+    if (NULL != obj->kernel_version) {
+        free(obj->kernel_version);
+        obj->kernel_version = NULL;
+    }
+    if (NULL != obj->labels) {
+        dc_free_str_array(obj->labels);
+        obj->labels = NULL;
+    }
+    if (NULL != obj->name) {
+        free(obj->name);
+        obj->name = NULL;
+    }
+    if (NULL != obj->no_proxy) {
+        free(obj->no_proxy);
+        obj->no_proxy = NULL;
+    }
+    if (NULL != obj->os_type) {
+        free(obj->os_type);
+        obj->os_type = NULL;
+    }
+    if (NULL != obj->operating_system) {
+        free(obj->operating_system);
+        obj->operating_system = NULL;
+    }
+    if (NULL != obj->registry_config) {
+        dc_free_registry_config(obj->registry_config);
+        obj->registry_config = NULL;
+    }
+    if (NULL != obj->sockets) {
+        free(obj->sockets);
+        obj->sockets = NULL;
+    }
+    if (NULL != obj->system_time) {
+        free(obj->system_time);
+        obj->system_time = NULL;
+    }
+    if (NULL != obj->server_version) {
+        free(obj->server_version);
+        obj->server_version = NULL;
+    }
+    if (NULL != obj->cluster_store) {
+        free(obj->cluster_store);
+        obj->cluster_store = NULL;
+    }
+    if (NULL != obj->cluster_advertise) {
+        free(obj->cluster_advertise);
+        obj->cluster_advertise = NULL;
+    }
+    if (NULL != obj->swarm) {
+        dc_free_swarm_info(obj->swarm);
+        obj->swarm = NULL;
+    }
+    if (NULL != obj->isolation) {
+        free(obj->isolation);
+        obj->isolation = NULL;
+    }
+    if (NULL != obj->security_options) {
+        dc_free_str_array(obj->security_options);
+        obj->security_options = NULL;
+    }
+    free(obj);
 }

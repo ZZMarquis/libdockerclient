@@ -42,6 +42,10 @@ int main() {
     free_ping_result(ping_result);
 
     info = dc_get_info("http://127.0.0.1:2375/v1.41/info");
+    if (NULL != info) {
+        dc_free_info(info);
+        info = NULL;
+    }
 
     return 0;
 }

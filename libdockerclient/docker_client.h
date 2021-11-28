@@ -1,6 +1,8 @@
 #ifndef LIBDOCKERCLIENT_DOCKER_CLIENT_H
 #define LIBDOCKERCLIENT_DOCKER_CLIENT_H
 
+#pragma pack(4)
+
 #include "curl/curl.h"
 #include "dc_defines.h"
 
@@ -158,8 +160,8 @@ typedef struct _dc_swarm_info {
     char *node_id;
     char *node_addr;
     char *local_node_statel;
-    DC_BOOL control_available;
     char *error;
+    DC_BOOL control_available;
     dc_peer_node **remote_managers;
     int remote_managers_count;
     int nodes;
@@ -227,5 +229,9 @@ typedef struct _dc_info {
 } dc_info;
 
 dc_info *dc_get_info(char *url);
+
+void dc_free_info(dc_info *obj);
+
+#pragma pack()
 
 #endif //LIBDOCKERCLIENT_DOCKER_CLIENT_H
